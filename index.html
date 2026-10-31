@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SJKHS - One Website System</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:system-ui}
+body{background:#0f172a;color:#fff;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+.card{background:#1e293b;width:100%;max-width:480px;border-radius:20px;padding:24px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.logo{text-align:center;margin-bottom:18px}
+.logo h1{font-size:28px;letter-spacing:1px}
+.logo p{color:#94a3b8;font-size:13px;margin-top:4px}
+.btn{width:100%;padding:14px;border-radius:12px;border:0;font-weight:700;font-size:16px;cursor:pointer;margin-top:10px}
+.btn-primary{background:#38bdf8;color:#0f172a}
+.btn-dark{background:#334155;color:#fff}
+.input{width:100%;padding:14px;border-radius:12px;border:1px solid #334155;background:#0f172a;color:#fff;margin-top:10px;font-size:16px}
+.hidden{display:none}
+.badge{background:#f59e0b;color:#000;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;gap:6px}
+.list{margin-top:12px;max-height:300px;overflow:auto}
+.item{background:#0f172a;border:1px solid #334155;padding:12px;border-radius:12px;margin-top:10px;display:flex;justify-content:space-between;align-items:center}
+.notif{position:fixed;top:12px;right:12px;background:#facc15;color:#000;padding:14px 18px;border-radius:12px;font-weight:800;display:none;z-index:999;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+</style>
+</head>
+<body>
+<div id="notif" class="notif">🔔 NEW REQUEST!</div>
+<div class="card" id="home">
+  <div class="logo">
+    <h1>🏫 SJKHS</h1>
+    <p>One Website - Admin + Teachers Same Link</p>
+    <p style="margin-top:8px;color:#38bdf8">sjkhs-74a09.web.app</p>
+  </div>
+  <button class="btn btn-primary" onclick="show('adminLogin')">Admin Login</button>
+  <button class="btn btn-dark" onclick="show('teacher')">Teacher Request Code</button>
+  <p style="text-align:center;color:#64748b;margin-top:14px;font-size:12px">Project: sjkhs-74a09 | Firebase Connected</p>
+</div>
+
+<div class="card hidden" id="adminLogin">
+  <h2>Admin Login</h2>
+  <input id="aUser" class="input" placeholder="Username: admin">
+  <input id="aPass" class="input" type="password" placeholder="Password: SJKHS@2026!">
+  <button class="btn btn-primary" onclick="adminLogin()">Login</button>
+  <button class="btn btn-dark" onclick="show('home')">Back</button>
+  <p id="aErr" style="color:#fb7185;margin-top:10px"></p>
+</div>
+
+<div class="card hidden" id="adminPanel">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h2>Admin Panel</h2>
+    <span class="badge" id="bell">🔔 0 Requests</span>
+  </div>
+  <p style="color:#94a3b8;font-size:13px;margin-top:6px">Requests from other devices appear here LIVE</p>
+  <div class="list" id="reqList"></div>
+  <button class="btn btn-dark" onclick="logout()">Logout</button>
+  <audio id="ding" src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg" preload="auto"></audio>
+</div>
+
+<div class="card hidden" id="teacher">
+  <h2>Teacher Request</h2>
+  <input id="tName" class="input" placeholder="Your Full Name">
+  <input id="tSub" class="input" placeholder="Subject / Department">
+  <input id="tPhone" class="input" placeholder="Phone / WhatsApp">
+  <button class="btn btn-primary" onclick="sendRequest()">Send Request to Admin 🔔</button>
+  <div id="tResult" style="margin-top:12px"></div>
+  <button class="btn btn-dark" onclick="show('home')">Back to Home</button>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBjJxwErvw75Ci_HyTu6TZhARqY-k_WimE",
+  authDomain: "sjkhs-74a09.firebaseapp.com",
+  projectId: "sjkhs-74a09",
+  storageBucket: "sjkhs-74a09.firebasestorage.app",
+  messagingSenderId: "578216969796",
+  appId: "1:578216969796:web:dd67438eef79defbac9e11"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+function show(id){
+  ['home','adminLogin','adminPanel','teacher'].forEach(x=>document.getElementById(x).classList.add('hidden'));
+  document.getElementById(id).classList.remove('hidden');
+}
+function adminLogin(){
+  const u=document.getElementById('aUser').value.trim();
+  const p=document.getElementById('aPass').value.trim();
+  if(u==='admin' && p==='SJKHS@2026!'){
+    show('adminPanel'); startListen();
+  } else {
+    document.getElementById('aErr').innerText='Invalid! Use admin / SJKHS@2026!';
+  }
+}
+function logout(){ show('home'); }
+function genCode(){ return 'SJKHS-'+Math.random().toString(36).substr(2,6).toUpperCase(); }
+
+async function sendRequest(){
+  const name=document.getElementById('tName').value.trim();
+  const sub=document.getElementById('tSub').value.trim();
+  const phone=document.getElementById('tPhone').value.trim();
+  if(!name||!sub){ alert('Fill name & subject'); return; }
+  const code=genCode();
+  try{
+    await db.collection('requests').add({
+      name, subject:sub, phone, code,
+      status:'pending',
+      created: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('tResult').innerHTML = `<div style="background:#052e16;padding:12px;border-radius:12px;margin-top:8px">
+      <b>✅ Request Sent!</b><br>Your Code: <b style="color:#facc15;font-size:20px">${code}</b><br><small>Admin will approve - keep code safe. Works cross-device via Firestore!</small>
+      </div>`;
+  }catch(e){
+    document.getElementById('tResult').innerHTML = `<p style="color:#fb7185">❌ Error: ${e.message}<br>Make sure Firestore Rules = allow read, write: if true;</p>`;
+  }
+}
+
+let firstLoad=true;
+function startListen(){
+  db.collection('requests').orderBy('created','desc').onSnapshot(snap=>{
+    const list=document.getElementById('reqList');
+    list.innerHTML='';
+    let count=0;
+    snap.forEach(doc=>{
+      const d=doc.data();
+      count++;
+      const div=document.createElement('div');
+      div.className='item';
+      div.innerHTML=`<div><b>${d.name}</b><br><small>${d.subject} | ${d.phone||''}<br>Code: <b style="color:#facc15">${d.code}</b> | ${d.status}</small></div>
+      <button onclick="approve('${doc.id}')" style="background:#22c55e;border:0;padding:8px 12px;border-radius:8px;font-weight:700;cursor:pointer">Approve</button>`;
+      list.appendChild(div);
+    });
+    document.getElementById('bell').innerText=`🔔 ${count} Requests`;
+    if(!firstLoad && count>0){
+      document.getElementById('notif').style.display='block';
+      document.getElementById('ding').play().catch(()=>{});
+      if(navigator.vibrate) navigator.vibrate([300,100,300]);
+      setTimeout(()=>document.getElementById('notif').style.display='none',4000);
+    }
+    firstLoad=false;
+  });
+}
+async function approve(id){
+  await db.collection('requests').doc(id).update({status:'approved'});
+  alert('Approved!');
+}
+</script>
+</body>
+</html>
